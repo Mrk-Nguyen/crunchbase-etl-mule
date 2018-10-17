@@ -1,8 +1,14 @@
 crunchbase:
-  url: "https://api.crunchbase.com/v3.1/organizations"
+  host: "api.crunchbase.com"
+  base: "/v3.1/organizations"
+  url: "https://api.crunchbase.com/v3.1/organizations/"
+  port: "443"
+  api:
+    key: "overridden_at_runtime"
   
 db:
   url: "jdbc:postgresql://localhost:5432/crunchbase"
   driverName: "org.postgresql.Driver"
   user: "postgres"
-  pass: "admin
+  pass: "admin"
+  

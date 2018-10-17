@@ -1,0 +1,76 @@
+{
+  "metadata": {
+    "version": 31,
+    "www_path_prefix": "https://www.crunchbase.com",
+    "api_path_prefix": "https://api.crunchbase.com",
+    "image_path_prefix": "http://public.crunchbase.com/t_api_images/"
+  },
+  "data": {
+    "paging": {
+      "total_items": 3565,
+      "number_of_pages": 15,
+      "current_page": 1,
+      "sort_order": "posted_on DESC",
+      "items_per_page": 250,
+      "next_page_url": "https://api.crunchbase.com/v3.1/organizations/21st-century-fox/news?page=2&sort_order=posted_on%20DESC&items_per_page=250",
+      "prev_page_url": null,
+      "key_set_url": null,
+      "collection_url": "https://api.crunchbase.com/v3.1/organizations/21st-century-fox/news",
+      "updated_since": null
+    },
+    "items": [
+      {
+        "type": "News",
+        "uuid": "6bd4705636e949a19ae11e62a8df257c",
+        "properties": {
+          "title": "National Geographic invites readers to get involved in ‘Planet or Plastic?’ initiative",
+          "author": "John Glenday",
+          "posted_on": "2018-10-16",
+          "posted_on_trust_code": 7,
+          "url": "https://www.thedrum.com/news/2018/10/16/national-geographic-invites-readers-get-involved-planet-or-plastic-initiative",
+          "created_at": 1539710731,
+          "updated_at": 1539710731
+        }
+      },
+      {
+        "type": "News",
+        "uuid": "d65d217f14674161ad5671c48b95915e",
+        "properties": {
+          "title": "Morgan Stanley predicted how Disney's Netflix competitor will fare in the streaming wars — and said it could be a $6 billion business",
+          "author": "Travis Clark",
+          "posted_on": "2018-10-16",
+          "posted_on_trust_code": 7,
+          "url": "https://www.businessinsider.com/disney-service-estimated-to-have-23-million-subscribers-by-2024-2018-10",
+          "created_at": 1539731999,
+          "updated_at": 1539731999
+        }
+      },
+      {
+        "type": "News",
+        "uuid": "054d02453fb14306ab28d0406e27fc38",
+        "properties": {
+          "title": "ACA Says DOJ Must Narrow Disney's Fox RSN Spin-off Conditions",
+          "author": "John Eggerton",
+          "posted_on": "2018-10-15",
+          "posted_on_trust_code": 7,
+          "url": "https://www.multichannel.com/news/aca-says-doj-needs-to-narrow-disneys-fox-rsn-spin-off-conditions",
+          "created_at": 1539701252,
+          "updated_at": 1539701252
+        }
+      },
+      {
+        "type": "News",
+        "uuid": "1be8ab65533846ffa5194df37662a8c1",
+        "properties": {
+          "title": "Tech stocks weigh on S&P 500; Disney gains",
+          "author": null,
+          "posted_on": "2018-10-15",
+          "posted_on_trust_code": 7,
+          "url": "https://www.channelnewsasia.com/news/business/stock-futures-drop-as-saudi-tensions-add-to-growing-worries-10830142",
+          "created_at": 1539649258,
+          "updated_at": 1539649258
+        }
+      }
+    ]
+  }
+}

@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:db="http://www.mulesoft.org/schema/mule/db"
-	xmlns="http://www.mulesoft.org/schema/mule/core"
-	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+<mule xmlns:batch="http://www.mulesoft.org/schema/mule/batch" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
-http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd">
 	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="a401403b-aa45-44ac-8f01-23039cc014ac" >
 		<http:listener-connection host="0.0.0.0" port="8081" />
 	</http:listener-config>
@@ -16,11 +18,99 @@ http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/htt
 		   password="${db.pass}" />
 		   
 	</db:config>
-	<flow name="test" doc:id="141f9591-44dd-403e-b362-0458d83097f6" >
+	<configuration-properties doc:name="Configuration properties" doc:id="9e4a923b-5598-4110-8358-5c9b19707486" file="config.yaml" />
+	<flow name="processOrg" doc:id="af556924-3624-42ca-b719-81d3a77204a9">
 		<http:listener doc:name="Listener" doc:id="c9daad6a-26e2-4967-8e82-ade4b6cf244c" config-ref="HTTP_Listener_config" path="/test">
-			<http:response >
-				<http:body ><![CDATA[#[output application/json --- payload]]]></http:body>
-			</http:response>
 		</http:listener>
+		<set-variable value="addthis" doc:name="organization" doc:id="15dbf783-b077-4237-a978-fd520850bb61" variableName="organization" />
+		<ee:transform doc:name="Build initial URL to pull news" doc:id="349705d3-206e-487c-a5c4-d6a1d78eb8f6">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="nextURL"><![CDATA[%dw 2.0
+output application/java
+
+var company = vars.organization default "--error--"
+var url = p("crunchbase.url")
+---
+url ++ company ++ "/news?items_per_page=250"]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<flow-ref doc:name="getNewsForOrg" doc:id="10c587f4-1969-4aa4-95e1-1c6df99ffcb6" name="getNewsForOrg" />
+		<choice doc:name="Choice" doc:id="94a60469-4aa7-48e8-9af2-28f94100710c">
+			<when expression='#[payload == "success"]'>
+				<set-payload value='#[output text/plain --- "Finished processing news posts for: $(vars.organization)"]' doc:name="Return success message" doc:id="5aa23c67-0644-42c9-a02a-66a8b1870328" />
+			</when>
+			<otherwise>
+				<set-payload doc:name="Return error message" doc:id="02a464eb-9ce7-4f2a-bfb5-1f9930010321" value='#[output text/plain --- "Error processing posts for: $(vars.organization)"]' />
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="getNewsForOrg" doc:id="141f9591-44dd-403e-b362-0458d83097f6">
+		<http:request method="GET" doc:name="Crunchbase organization/news" doc:id="c0d95f7b-404d-41e2-9193-99805489f764" url="#[vars.nextURL]">
+			<http:query-params><![CDATA[#[output application/java
+---
+{
+	user_key : p("crunchbase.api.key")
+}]]]></http:query-params>
+			
+		</http:request>
+		<set-variable value="#[payload.data.paging.next_page_url]" doc:name="nextURL" doc:id="641ac49e-6b78-48f4-b513-c31acda06f4a" variableName="nextURL" />
+		<flow-ref doc:name="batchProcessNewsPosts" doc:id="ac8d4da7-dcca-4713-b718-b2bb91ba9007" name="batchProcessNewsPosts" target="batchSummary" targetValue="#[payload]"/>
+		<choice doc:name="Choice" doc:id="69ecb966-112b-4d5e-9e55-495c07723476">
+			<when expression="vars.nextURL != null">
+				<flow-ref doc:name="getNewsForOrg" doc:id="07caf361-81f8-4970-9cbd-51d3dbf84cec" name="getNewsForOrg" />
+			</when>
+			<otherwise>
+				<logger level="INFO" doc:name="Logger" doc:id="294dcbe3-a899-4fae-9219-30d2594fe14d" message="Finished pulling all news for: #[vars.organization], total news posts: #[payload.data.paging.total_items]" category="getNewsForOrg" />
+				<set-payload value="success" doc:name="success" doc:id="191aff72-c7ff-4892-9076-17d0edd9affc" />
+			</otherwise>
+		</choice>
+				<error-handler>
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="b38d49b4-1fe7-4625-8961-afa8d939cebe" type="HTTP:BAD_REQUEST">
+				<logger level="ERROR" doc:name="Log error message" doc:id="340b2972-e692-4bae-801f-7f9b1bd7f941" message="Error retrieving posts for: #[vars.organization], continuing with rest of other organizations" category="getNewsForOrg" />
+				<set-payload value="error" doc:name="Set Payload" doc:id="67d4d00d-6bc6-4840-996c-80750f66b244" />
+			</on-error-continue>
+		</error-handler>
+	</flow>
+	<flow name="batchProcessNewsPosts" doc:id="62bbb087-3152-40d8-aae8-c52cb4b41910" >
+		<logger level="INFO" doc:name="Logger" doc:id="b62c9072-6f45-48a1-8603-71622f505eed" message='#[output text/plain --- "Uploading news data batch $(payload.data.paging.current_page default 0) of $(payload.data.paging.number_of_pages default 0) for $(vars.organization) into PostGresDB"]' category="getNewsForOrg" />
+		<ee:transform doc:name="Retrieve just news postings" doc:id="569d86b2-e322-43d6-b3c2-f89655f469b1" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+payload.data.items]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<batch:job jobName="batch_job" doc:id="57cb086f-93e5-4106-87d0-e04bb38fae5c" blockSize="250">
+			<batch:process-records >
+				<batch:step name="Map" doc:id="2163343a-6634-4d83-8a0c-7e135556c553" >
+					<ee:transform doc:name="Map news post" doc:id="a8d8f483-4cbb-4cfa-a91a-94805a572d69" >
+						<ee:message >
+							<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+{
+	uuid: payload.uuid,
+	company: vars.organization,
+	title: payload.properties.title,
+	news_url: payload.properties.url,
+	author: payload.properties.author,
+	posted_on: payload.properties.posted_on,
+	created_at: payload.properties.created_at,
+	updated_at: payload.properties.updated_at	
+}]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+					<batch:aggregator doc:name="Aggregate 250" doc:id="5e5acc1d-9cbd-4426-9c30-094ce6c61506" size="250">
+						<db:bulk-insert doc:name="Bulk insert" doc:id="3865cce3-c9f0-4c15-be35-25e7e45290ac" config-ref="PostGres">
+							<db:sql >INSERT INTO cb_news_test
+VALUES (:uuid, :company, :title, :news_url, :author, :posted_on, :created_at, :updated_at)</db:sql>
+						</db:bulk-insert>
+					</batch:aggregator>
+				</batch:step>
+			</batch:process-records>
+		</batch:job>
 	</flow>
 </mule>
