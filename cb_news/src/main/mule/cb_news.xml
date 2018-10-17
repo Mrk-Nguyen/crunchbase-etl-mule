@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="a401403b-aa45-44ac-8f01-23039cc014ac" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<db:config name="PostGres" doc:name="Database Config" doc:id="51ab5af3-c353-4d11-bd53-46479752fc4c" >
+		<db:generic-connection 
+		   url="${db.url}" 
+		   driverClassName="${db.driverName}" 
+		   user="${db.user}" 
+		   password="${db.pass}" />
+		   
+	</db:config>
+	<flow name="test" doc:id="141f9591-44dd-403e-b362-0458d83097f6" >
+		<http:listener doc:name="Listener" doc:id="c9daad6a-26e2-4967-8e82-ade4b6cf244c" config-ref="HTTP_Listener_config" path="/test">
+			<http:response >
+				<http:body ><![CDATA[#[output application/json --- payload]]]></http:body>
+			</http:response>
+		</http:listener>
+	</flow>
+</mule>

@@ -1,0 +1,8 @@
+crunchbase:
+  url: "https://api.crunchbase.com/v3.1/organizations"
+  
+db:
+  url: "jdbc:postgresql://localhost:5432/crunchbase"
+  driverName: "org.postgresql.Driver"
+  user: "postgres"
+  pass: "admin
