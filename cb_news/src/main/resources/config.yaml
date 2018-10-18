@@ -4,11 +4,12 @@ crunchbase:
     key: "overridden_at_runtime"
     
 company:
-  list: "Desktop/crunchbase/process_company_list_smalltolarge.csv"
+  list: "Desktop/crunchbase/process_company_list_smalltolarge-test.csv"
   
 db:
   url: "jdbc:postgresql://localhost:5432/crunchbase"
   driverName: "org.postgresql.Driver"
   user: "postgres"
   pass: "admin"
+  table: "cb_news_test"
   

@@ -102,6 +102,9 @@ return payload</scripting:code>
 	</flow>
 	<flow name="processOrgs" doc:id="af556924-3624-42ca-b719-81d3a77204a9">
 		<http:listener doc:name="Listener" doc:id="c9daad6a-26e2-4967-8e82-ade4b6cf244c" config-ref="HTTP_Listener_config" path="/process">
+			<http:response >
+				<http:body ><![CDATA[#[output application/json --- payload]]]></http:body>
+			</http:response>
 		</http:listener>
 		<file:read doc:name="Get company list" doc:id="d5d18201-82ea-4076-8c47-1893d2918428" path="${company.list}" outputMimeType="application/csv"/>
 		<ee:transform doc:name="Convert CSV to Array" doc:id="6c5ba442-636d-41e6-9497-ed28fc927717" >
@@ -112,14 +115,15 @@ output application/java
 payload]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
-		<async doc:name="Async" doc:id="9c6c3997-e2da-4c94-bfec-d0aa3a8a3b61" >
-			<foreach doc:name="For Each" doc:id="8549ede9-538b-4326-b2f0-4610f3ba60f6">
-			<set-variable value="#[payload.company]" doc:name="organization" doc:id="15dbf783-b077-4237-a978-fd520850bb61" variableName="organization" />
-			<ee:transform doc:name="Build initial URL to pull news" doc:id="349705d3-206e-487c-a5c4-d6a1d78eb8f6">
+		<batch:job jobName="batchProcessOrganization-Batch-Block-Size-6" doc:id="2976163d-8b12-4e44-a173-a4be2de957fc" blockSize="6" target="batchSummary">
+			<batch:process-records >
+				<batch:step name="Step" doc:id="58d20630-f5ee-4c42-b061-657501455c8d" >
+					<set-variable value="#[payload.company]" doc:name="organization" doc:id="15dbf783-b077-4237-a978-fd520850bb61" variableName="organization" />
+					<ee:transform doc:name="Build initial URL to pull news" doc:id="349705d3-206e-487c-a5c4-d6a1d78eb8f6">
 			<ee:message>
 			</ee:message>
 			<ee:variables>
-						<ee:set-variable variableName="nextURL" ><![CDATA[%dw 2.0
+						<ee:set-variable variableName="nextURL"><![CDATA[%dw 2.0
 output application/java
 
 var company = vars.organization default "--error--"
@@ -128,18 +132,39 @@ var url = p("crunchbase.url")
 url ++ company ++ "/news?items_per_page=250"]]></ee:set-variable>
 			</ee:variables>
 		</ee:transform>
-			<flow-ref doc:name="getNewsForOrg" doc:id="10c587f4-1969-4aa4-95e1-1c6df99ffcb6" name="getNewsForOrg" />
-			<choice doc:name="Choice" doc:id="94a60469-4aa7-48e8-9af2-28f94100710c">
-			<when expression='#[payload == "success"]'>
-					<logger level="INFO" doc:name="Log success" doc:id="4cc07a3a-aed1-4769-87ac-5531023d2f0d" message='#["Finished processing news posts for: $(vars.organization)"]' />
-			</when>
-			<otherwise>
-					<logger level="INFO" doc:name="Log error" doc:id="b8010afa-865c-445c-9e82-608be7d4bdbe" message='#["Error processing posts for: $(vars.organization)"]' />
-			</otherwise>
-		</choice>
+					<flow-ref doc:name="getNewsForOrg" doc:id="10c587f4-1969-4aa4-95e1-1c6df99ffcb6" name="getNewsForOrg" />
+				</batch:step>
+			</batch:process-records>
+		</batch:job>
+	</flow>
+	<flow name="getNewsForOrg" doc:id="141f9591-44dd-403e-b362-0458d83097f6">
+		<flow-ref doc:name="Get First Set of News Postings" doc:id="2e36bc71-c9c5-48d9-82b2-c8a33dab1b3c" name="getNewsPosts" />
+		<set-variable value="#[payload.data.paging.next_page_url]" doc:name="nextURL" doc:id="4326157e-2631-410c-a6dc-aaacdd231d82" variableName="nextURL" />
+		<ee:transform doc:name="Create iterator to iterate through rest of pages" doc:id="11ed4b93-6326-4454-9f94-dd08d0ef9cb3">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="iteratorArray"><![CDATA[%dw 2.0
+output application/java
+
+var total_pages = payload.data.paging.number_of_pages default 1
+---
+if (total_pages > 1)
+	2 to total_pages
+else
+	[]]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<foreach doc:name="For Each" doc:id="44e7436f-4cc5-44ac-8c89-582db4add087" collection="vars.iteratorArray">
+			<flow-ref doc:name="getNewsPosts" doc:id="760670c6-e544-4d50-9289-ced896e76187" name="getNewsPosts" />
+			<set-variable value="#[payload.data.paging.next_page_url]" doc:name="nextURL" doc:id="111180f7-3a18-47a0-8037-9687b17d65fa" variableName="nextURL" />
 		</foreach>
-		</async>
-		<set-payload value="Processing news posts now..." doc:name="Set Payload" doc:id="f9dc7d35-a6c4-4f44-8bd4-84b7e567387b" />
+		<logger level="INFO" doc:name="Logger" doc:id="294dcbe3-a899-4fae-9219-30d2594fe14d" message="Finished pulling all news for: #[vars.organization], total news posts: #[payload.data.paging.total_items]" category="getNewsForOrg" />
+		<error-handler>
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="b38d49b4-1fe7-4625-8961-afa8d939cebe" type="ANY">
+				<logger level="ERROR" doc:name="Log error message" doc:id="340b2972-e692-4bae-801f-7f9b1bd7f941" message="Error retrieving posts for: #[vars.organization], continuing with rest of other organizations" category="getNewsForOrg" />
+			</on-error-continue>
+		</error-handler>
 	</flow>
 	<sub-flow name="getNewsPosts" doc:id="5989168f-390a-4b04-ba2d-7b403c56078c" >
 		<http:request method="GET" doc:name="Crunchbase organization/news" doc:id="c0d95f7b-404d-41e2-9193-99805489f764" url="#[vars.nextURL]">
@@ -150,77 +175,29 @@ url ++ company ++ "/news?items_per_page=250"]]></ee:set-variable>
 }]]]></http:query-params>
 			
 		</http:request>
-		<flow-ref doc:name="batchProcessNewsPosts" doc:id="ac8d4da7-dcca-4713-b718-b2bb91ba9007" name="batchProcessNewsPosts" target="batchSummary" targetValue="#[payload]" />
-	</sub-flow>
-	<flow name="getNewsForOrg" doc:id="141f9591-44dd-403e-b362-0458d83097f6">
-		<flow-ref doc:name="Get First Set of News Postings" doc:id="2e36bc71-c9c5-48d9-82b2-c8a33dab1b3c" name="getNewsPosts"/>
-		<set-variable value="#[payload.data.paging.next_page_url]" doc:name="nextURL" doc:id="4326157e-2631-410c-a6dc-aaacdd231d82" variableName="nextURL"/>
-		<ee:transform doc:name="Create iterator to iterate through rest of pages" doc:id="11ed4b93-6326-4454-9f94-dd08d0ef9cb3">
-			<ee:message>
-			</ee:message>
-			<ee:variables>
-				<ee:set-variable variableName="iteratorArray"><![CDATA[%dw 2.0
-output application/java
-
-var total_pages = payload.data.paging.number_of_pages default 4
----
-if (total_pages > 1)
-	2 to total_pages
-else
-	[]]]></ee:set-variable>
-			</ee:variables>
-		</ee:transform>
-		<foreach doc:name="For Each" doc:id="44e7436f-4cc5-44ac-8c89-582db4add087" collection="vars.iteratorArray">
-			<flow-ref doc:name="getNewsPosts" doc:id="760670c6-e544-4d50-9289-ced896e76187" name="getNewsPosts"/>
-			<set-variable value="#[payload.data.paging.next_page_url]" doc:name="nextURL" doc:id="111180f7-3a18-47a0-8037-9687b17d65fa" variableName="nextURL"/>
-		</foreach>
-		<logger level="INFO" doc:name="Logger" doc:id="294dcbe3-a899-4fae-9219-30d2594fe14d" message="Finished pulling all news for: #[vars.organization], total news posts: #[payload.data.paging.total_items]" category="getNewsForOrg" />
-		<set-payload value="success" doc:name="success" doc:id="191aff72-c7ff-4892-9076-17d0edd9affc" />
-		<error-handler>
-			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="b38d49b4-1fe7-4625-8961-afa8d939cebe" type="ANY">
-				<logger level="ERROR" doc:name="Log error message" doc:id="340b2972-e692-4bae-801f-7f9b1bd7f941" message="Error retrieving posts for: #[vars.organization], continuing with rest of other organizations" category="getNewsForOrg" />
-				<set-payload value="error" doc:name="Set Payload" doc:id="67d4d00d-6bc6-4840-996c-80750f66b244" />
-			</on-error-continue>
-		</error-handler>
-	</flow>
-	<flow name="batchProcessNewsPosts" doc:id="62bbb087-3152-40d8-aae8-c52cb4b41910" >
-		<logger level="INFO" doc:name="Logger" doc:id="b62c9072-6f45-48a1-8603-71622f505eed" message='#[output text/plain --- "Uploading news data batch $(payload.data.paging.current_page default 0) of $(payload.data.paging.number_of_pages default 0) for $(vars.organization) into PostGresDB"]' category="getNewsForOrg" />
-		<ee:transform doc:name="Extract just news postings" doc:id="569d86b2-e322-43d6-b3c2-f89655f469b1" >
+		<logger level="INFO" doc:name="Logger" doc:id="f72f6659-4fc4-49f4-abd8-f663690fc253" message='#[output text/plain --- "Uploading news data batch $(payload.data.paging.current_page default 0) of $(payload.data.paging.number_of_pages default 0) for $(vars.organization) into PostGresDB"]' category="getNewsForOrg" />
+		<ee:transform doc:name="Extract just news postings" doc:id="c2dc27f9-a63c-4d6e-8f6b-f6545240951b" >
 			<ee:message >
 				<ee:set-payload ><![CDATA[%dw 2.0
 output application/java
 ---
-payload.data.items]]></ee:set-payload>
+payload.data.items map ((news) ->
+	{
+		uuid: news.uuid,
+		company: vars.organization,
+		title: news.properties.title,
+		news_url: news.properties.url,
+		author: news.properties.author,
+		posted_on: news.properties.posted_on,
+		created_at: news.properties.created_at,
+		updated_at: news.properties.updated_at	
+	}
+)]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
-		<batch:job jobName="batch_job" doc:id="57cb086f-93e5-4106-87d0-e04bb38fae5c" blockSize="250">
-			<batch:process-records >
-				<batch:step name="Map" doc:id="2163343a-6634-4d83-8a0c-7e135556c553" >
-					<ee:transform doc:name="Map news post" doc:id="a8d8f483-4cbb-4cfa-a91a-94805a572d69" >
-						<ee:message >
-							<ee:set-payload ><![CDATA[%dw 2.0
-output application/java
----
-{
-	uuid: payload.uuid,
-	company: vars.organization,
-	title: payload.properties.title,
-	news_url: payload.properties.url,
-	author: payload.properties.author,
-	posted_on: payload.properties.posted_on,
-	created_at: payload.properties.created_at,
-	updated_at: payload.properties.updated_at	
-}]]></ee:set-payload>
-						</ee:message>
-					</ee:transform>
-					<batch:aggregator doc:name="Aggregate 250" doc:id="5e5acc1d-9cbd-4426-9c30-094ce6c61506" size="250">
-						<db:bulk-insert doc:name="Bulk insert" doc:id="3865cce3-c9f0-4c15-be35-25e7e45290ac" config-ref="PostGres">
-							<db:sql >INSERT INTO cb_news
+		<db:bulk-insert doc:name="Bulk insert" doc:id="d6ffe3c5-e18e-4e6e-a0a7-ac9bc18f95ee" config-ref="PostGres">
+							<db:sql>INSERT INTO ${db.table}
 VALUES (:uuid, :company, :title, :news_url, :author, :posted_on, :created_at, :updated_at)</db:sql>
 						</db:bulk-insert>
-					</batch:aggregator>
-				</batch:step>
-			</batch:process-records>
-		</batch:job>
-	</flow>
+	</sub-flow>
 </mule>
