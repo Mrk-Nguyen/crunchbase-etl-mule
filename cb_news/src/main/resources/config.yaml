@@ -1,10 +1,10 @@
 crunchbase:
-  host: "api.crunchbase.com"
-  base: "/v3.1/organizations"
   url: "https://api.crunchbase.com/v3.1/organizations/"
-  port: "443"
   api:
     key: "overridden_at_runtime"
+    
+company:
+  list: "Desktop/crunchbase/process_company_list_smalltolarge.csv"
   
 db:
   url: "jdbc:postgresql://localhost:5432/crunchbase"

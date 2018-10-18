@@ -55,4 +55,34 @@ type news = {|
       </types:input-event>
     </types:processor-declaration>
   </types:enrichment>
+  <types:enrichment select="#11ed4b93-6326-4454-9f94-dd08d0ef9cb3">
+    <types:processor-declaration/>
+  </types:enrichment>
+  <types:enrichment select="#2e36bc71-c9c5-48d9-82b2-c8a33dab1b3c">
+    <types:processor-declaration>
+      <types:output-event>
+        <types:message>
+          <types:payload type="news"/>
+        </types:message>
+      </types:output-event>
+    </types:processor-declaration>
+  </types:enrichment>
+  <types:enrichment select="#5989168f-390a-4b04-ba2d-7b403c56078c">
+    <types:processor-declaration>
+      <types:output-event>
+        <types:message>
+          <types:payload type="news"/>
+        </types:message>
+      </types:output-event>
+    </types:processor-declaration>
+  </types:enrichment>
+  <types:enrichment select="#83c6e692-c454-4dee-a262-9585fc0bc633">
+    <types:processor-declaration>
+      <types:output-event>
+        <types:message>
+          <types:payload type="news"/>
+        </types:message>
+      </types:output-event>
+    </types:processor-declaration>
+  </types:enrichment>
 </types:mule>

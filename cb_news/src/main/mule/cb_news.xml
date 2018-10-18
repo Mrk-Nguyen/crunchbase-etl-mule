@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:batch="http://www.mulesoft.org/schema/mule/batch" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
-	xmlns:http="http://www.mulesoft.org/schema/mule/http"
-	xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+<mule xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting" xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:batch="http://www.mulesoft.org/schema/mule/batch"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
 http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
-http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd">
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd">
 	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="a401403b-aa45-44ac-8f01-23039cc014ac" >
 		<http:listener-connection host="0.0.0.0" port="8081" />
 	</http:listener-config>
@@ -19,15 +21,105 @@ http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/ba
 		   
 	</db:config>
 	<configuration-properties doc:name="Configuration properties" doc:id="9e4a923b-5598-4110-8358-5c9b19707486" file="config.yaml" />
-	<flow name="processOrg" doc:id="af556924-3624-42ca-b719-81d3a77204a9">
-		<http:listener doc:name="Listener" doc:id="c9daad6a-26e2-4967-8e82-ade4b6cf244c" config-ref="HTTP_Listener_config" path="/test">
+	<flow name="getTotalPageSize" doc:id="b92918de-d3bb-4136-a699-3de8b0f9b23c" >
+		<http:listener doc:name="Listener" doc:id="ff3e5c6a-73f3-4661-a6f7-80ed16addecb" config-ref="HTTP_Listener_config" path="/getsizes">
+			<http:response >
+				<http:body ><![CDATA[#[output application/json --- payload]]]></http:body>
+			</http:response>
 		</http:listener>
-		<set-variable value="addthis" doc:name="organization" doc:id="15dbf783-b077-4237-a978-fd520850bb61" variableName="organization" />
-		<ee:transform doc:name="Build initial URL to pull news" doc:id="349705d3-206e-487c-a5c4-d6a1d78eb8f6">
+		<file:read doc:name="Get company list" doc:id="4c9bd069-2b50-4c92-ab57-c544e026fb47" path="Desktop/crunchbase/company_list.csv" outputMimeType="application/csv" />
+		<ee:transform doc:name="Convert CSV to Array" doc:id="4318953b-fa3b-4765-a250-ce9b657eb869" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<async doc:name="Async" doc:id="852f51be-fa37-4821-83fe-8a28e75d5d4c" >
+			<foreach doc:name="For Each" doc:id="c9f28f31-4964-495a-b34f-8f75a6849dbf">
+			<set-variable value="#[payload.company]" doc:name="organization" doc:id="6a903d4d-ce5c-4428-bf80-b662a5847d74" variableName="organization" />
+			<ee:transform doc:name="Build initial URL to pull news" doc:id="1e35c67d-5939-4f9d-9ad1-0e653b536fcb">
+					
+				<ee:variables>
+					<ee:set-variable variableName="nextURL"><![CDATA[%dw 2.0
+output application/java
+
+var company = vars.organization default "--error--"
+var url = p("crunchbase.url")
+---
+url ++ company ++ "/news?items_per_page=20"]]>
+</ee:set-variable>
+</ee:variables>
+			</ee:transform>
+			<try doc:name="Try" doc:id="6faeed00-36e0-4674-a83f-721d5930766f">
+				<http:request method="GET" doc:name="Crunchbase organization/news" doc:id="83c6e692-c454-4dee-a262-9585fc0bc633" url="#[vars.nextURL]">
+				<http:query-params><![CDATA[#[output application/java
+---
+{
+	user_key : p("crunchbase.api.key")
+}]]]></http:query-params>
+			</http:request>
+					<ee:transform doc:name="Convert to CSV" doc:id="5398150a-de49-4c8c-a3d2-2df30b5cac0a">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/csv header=false
+---
+[
+	{
+	   "company": vars.organization,
+	   "total_pages": payload.data.paging.number_of_pages
+    }
+]]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+					<file:write doc:name="company_list_size" doc:id="595e556a-a299-4a9c-932d-93b15bb7b4b0" path="Desktop/crunchbase/company_list_size.csv" mode="APPEND" />
+					<error-handler>
+					<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="583dc6e3-d3c2-465a-9aaf-f82ac65108dc" type="HTTP:BAD_REQUEST, HTTP:CLIENT_SECURITY, HTTP:CONNECTIVITY, HTTP:FORBIDDEN, HTTP:INTERNAL_SERVER_ERROR, HTTP:METHOD_NOT_ALLOWED, HTTP:NOT_ACCEPTABLE, HTTP:NOT_FOUND, HTTP:PARSING, HTTP:RETRY_EXHAUSTED, HTTP:SECURITY, HTTP:SERVICE_UNAVAILABLE, HTTP:TIMEOUT, HTTP:TOO_MANY_REQUESTS, HTTP:UNAUTHORIZED, HTTP:UNSUPPORTED_MEDIA_TYPE">
+				<logger level="ERROR" doc:name="Log error message" doc:id="21d5a88b-5c07-4cf0-9dde-d098a02aa3b6" message="Error retrieving posts for: #[vars.organization], continuing with rest of other organizations" category="getNewsForOrg" />
+				<ee:transform doc:name="Convert to CSV" doc:id="234cdb74-a55c-48e9-816f-6fdae740023f">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/csv header=false
+---
+[
+	{
+	   "company": vars.organization
+    }
+]]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<file:write doc:name="org_failures.csv" doc:id="76979a85-b0e4-46bd-976e-e5fa9d7cdb80" path="Desktop/crunchbase/org_failures.csv" mode="APPEND" />
+			</on-error-continue>
+				</error-handler>
+			</try>
+			<scripting:execute engine="groovy" doc:name="Execute" doc:id="05944df8-3517-4964-a909-5576ada936b2">
+				<scripting:code>sleep(100)
+return payload</scripting:code>
+			</scripting:execute>
+		</foreach>
+		</async>
+	</flow>
+	<flow name="processOrgs" doc:id="af556924-3624-42ca-b719-81d3a77204a9">
+		<http:listener doc:name="Listener" doc:id="c9daad6a-26e2-4967-8e82-ade4b6cf244c" config-ref="HTTP_Listener_config" path="/process">
+		</http:listener>
+		<file:read doc:name="Get company list" doc:id="d5d18201-82ea-4076-8c47-1893d2918428" path="${company.list}" outputMimeType="application/csv"/>
+		<ee:transform doc:name="Convert CSV to Array" doc:id="6c5ba442-636d-41e6-9497-ed28fc927717" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<async doc:name="Async" doc:id="9c6c3997-e2da-4c94-bfec-d0aa3a8a3b61" >
+			<foreach doc:name="For Each" doc:id="8549ede9-538b-4326-b2f0-4610f3ba60f6">
+			<set-variable value="#[payload.company]" doc:name="organization" doc:id="15dbf783-b077-4237-a978-fd520850bb61" variableName="organization" />
+			<ee:transform doc:name="Build initial URL to pull news" doc:id="349705d3-206e-487c-a5c4-d6a1d78eb8f6">
 			<ee:message>
 			</ee:message>
 			<ee:variables>
-				<ee:set-variable variableName="nextURL"><![CDATA[%dw 2.0
+						<ee:set-variable variableName="nextURL" ><![CDATA[%dw 2.0
 output application/java
 
 var company = vars.organization default "--error--"
@@ -36,17 +128,20 @@ var url = p("crunchbase.url")
 url ++ company ++ "/news?items_per_page=250"]]></ee:set-variable>
 			</ee:variables>
 		</ee:transform>
-		<flow-ref doc:name="getNewsForOrg" doc:id="10c587f4-1969-4aa4-95e1-1c6df99ffcb6" name="getNewsForOrg" />
-		<choice doc:name="Choice" doc:id="94a60469-4aa7-48e8-9af2-28f94100710c">
+			<flow-ref doc:name="getNewsForOrg" doc:id="10c587f4-1969-4aa4-95e1-1c6df99ffcb6" name="getNewsForOrg" />
+			<choice doc:name="Choice" doc:id="94a60469-4aa7-48e8-9af2-28f94100710c">
 			<when expression='#[payload == "success"]'>
-				<set-payload value='#[output text/plain --- "Finished processing news posts for: $(vars.organization)"]' doc:name="Return success message" doc:id="5aa23c67-0644-42c9-a02a-66a8b1870328" />
+					<logger level="INFO" doc:name="Log success" doc:id="4cc07a3a-aed1-4769-87ac-5531023d2f0d" message='#["Finished processing news posts for: $(vars.organization)"]' />
 			</when>
 			<otherwise>
-				<set-payload doc:name="Return error message" doc:id="02a464eb-9ce7-4f2a-bfb5-1f9930010321" value='#[output text/plain --- "Error processing posts for: $(vars.organization)"]' />
+					<logger level="INFO" doc:name="Log error" doc:id="b8010afa-865c-445c-9e82-608be7d4bdbe" message='#["Error processing posts for: $(vars.organization)"]' />
 			</otherwise>
 		</choice>
+		</foreach>
+		</async>
+		<set-payload value="Processing news posts now..." doc:name="Set Payload" doc:id="f9dc7d35-a6c4-4f44-8bd4-84b7e567387b" />
 	</flow>
-	<flow name="getNewsForOrg" doc:id="141f9591-44dd-403e-b362-0458d83097f6">
+	<sub-flow name="getNewsPosts" doc:id="5989168f-390a-4b04-ba2d-7b403c56078c" >
 		<http:request method="GET" doc:name="Crunchbase organization/news" doc:id="c0d95f7b-404d-41e2-9193-99805489f764" url="#[vars.nextURL]">
 			<http:query-params><![CDATA[#[output application/java
 ---
@@ -55,19 +150,34 @@ url ++ company ++ "/news?items_per_page=250"]]></ee:set-variable>
 }]]]></http:query-params>
 			
 		</http:request>
-		<set-variable value="#[payload.data.paging.next_page_url]" doc:name="nextURL" doc:id="641ac49e-6b78-48f4-b513-c31acda06f4a" variableName="nextURL" />
-		<flow-ref doc:name="batchProcessNewsPosts" doc:id="ac8d4da7-dcca-4713-b718-b2bb91ba9007" name="batchProcessNewsPosts" target="batchSummary" targetValue="#[payload]"/>
-		<choice doc:name="Choice" doc:id="69ecb966-112b-4d5e-9e55-495c07723476">
-			<when expression="vars.nextURL != null">
-				<flow-ref doc:name="getNewsForOrg" doc:id="07caf361-81f8-4970-9cbd-51d3dbf84cec" name="getNewsForOrg" />
-			</when>
-			<otherwise>
-				<logger level="INFO" doc:name="Logger" doc:id="294dcbe3-a899-4fae-9219-30d2594fe14d" message="Finished pulling all news for: #[vars.organization], total news posts: #[payload.data.paging.total_items]" category="getNewsForOrg" />
-				<set-payload value="success" doc:name="success" doc:id="191aff72-c7ff-4892-9076-17d0edd9affc" />
-			</otherwise>
-		</choice>
-				<error-handler>
-			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="b38d49b4-1fe7-4625-8961-afa8d939cebe" type="HTTP:BAD_REQUEST">
+		<flow-ref doc:name="batchProcessNewsPosts" doc:id="ac8d4da7-dcca-4713-b718-b2bb91ba9007" name="batchProcessNewsPosts" target="batchSummary" targetValue="#[payload]" />
+	</sub-flow>
+	<flow name="getNewsForOrg" doc:id="141f9591-44dd-403e-b362-0458d83097f6">
+		<flow-ref doc:name="Get First Set of News Postings" doc:id="2e36bc71-c9c5-48d9-82b2-c8a33dab1b3c" name="getNewsPosts"/>
+		<set-variable value="#[payload.data.paging.next_page_url]" doc:name="nextURL" doc:id="4326157e-2631-410c-a6dc-aaacdd231d82" variableName="nextURL"/>
+		<ee:transform doc:name="Create iterator to iterate through rest of pages" doc:id="11ed4b93-6326-4454-9f94-dd08d0ef9cb3">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="iteratorArray"><![CDATA[%dw 2.0
+output application/java
+
+var total_pages = payload.data.paging.number_of_pages default 4
+---
+if (total_pages > 1)
+	2 to total_pages
+else
+	[]]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<foreach doc:name="For Each" doc:id="44e7436f-4cc5-44ac-8c89-582db4add087" collection="vars.iteratorArray">
+			<flow-ref doc:name="getNewsPosts" doc:id="760670c6-e544-4d50-9289-ced896e76187" name="getNewsPosts"/>
+			<set-variable value="#[payload.data.paging.next_page_url]" doc:name="nextURL" doc:id="111180f7-3a18-47a0-8037-9687b17d65fa" variableName="nextURL"/>
+		</foreach>
+		<logger level="INFO" doc:name="Logger" doc:id="294dcbe3-a899-4fae-9219-30d2594fe14d" message="Finished pulling all news for: #[vars.organization], total news posts: #[payload.data.paging.total_items]" category="getNewsForOrg" />
+		<set-payload value="success" doc:name="success" doc:id="191aff72-c7ff-4892-9076-17d0edd9affc" />
+		<error-handler>
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="b38d49b4-1fe7-4625-8961-afa8d939cebe" type="ANY">
 				<logger level="ERROR" doc:name="Log error message" doc:id="340b2972-e692-4bae-801f-7f9b1bd7f941" message="Error retrieving posts for: #[vars.organization], continuing with rest of other organizations" category="getNewsForOrg" />
 				<set-payload value="error" doc:name="Set Payload" doc:id="67d4d00d-6bc6-4840-996c-80750f66b244" />
 			</on-error-continue>
@@ -75,7 +185,7 @@ url ++ company ++ "/news?items_per_page=250"]]></ee:set-variable>
 	</flow>
 	<flow name="batchProcessNewsPosts" doc:id="62bbb087-3152-40d8-aae8-c52cb4b41910" >
 		<logger level="INFO" doc:name="Logger" doc:id="b62c9072-6f45-48a1-8603-71622f505eed" message='#[output text/plain --- "Uploading news data batch $(payload.data.paging.current_page default 0) of $(payload.data.paging.number_of_pages default 0) for $(vars.organization) into PostGresDB"]' category="getNewsForOrg" />
-		<ee:transform doc:name="Retrieve just news postings" doc:id="569d86b2-e322-43d6-b3c2-f89655f469b1" >
+		<ee:transform doc:name="Extract just news postings" doc:id="569d86b2-e322-43d6-b3c2-f89655f469b1" >
 			<ee:message >
 				<ee:set-payload ><![CDATA[%dw 2.0
 output application/java
@@ -105,7 +215,7 @@ output application/java
 					</ee:transform>
 					<batch:aggregator doc:name="Aggregate 250" doc:id="5e5acc1d-9cbd-4426-9c30-094ce6c61506" size="250">
 						<db:bulk-insert doc:name="Bulk insert" doc:id="3865cce3-c9f0-4c15-be35-25e7e45290ac" config-ref="PostGres">
-							<db:sql >INSERT INTO cb_news_test
+							<db:sql >INSERT INTO cb_news
 VALUES (:uuid, :company, :title, :news_url, :author, :posted_on, :created_at, :updated_at)</db:sql>
 						</db:bulk-insert>
 					</batch:aggregator>
