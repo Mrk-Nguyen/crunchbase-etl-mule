@@ -85,4 +85,10 @@ type news = {|
       </types:output-event>
     </types:processor-declaration>
   </types:enrichment>
+  <types:enrichment select="#c2dc27f9-a63c-4d6e-8f6b-f6545240951b">
+    <types:processor-declaration/>
+  </types:enrichment>
+  <types:enrichment select="#92db997f-b5f3-44bd-b8e2-49a2858e9dde">
+    <types:processor-declaration/>
+  </types:enrichment>
 </types:mule>
