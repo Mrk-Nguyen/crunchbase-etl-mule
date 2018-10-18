@@ -115,7 +115,7 @@ output application/java
 payload]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
-		<batch:job jobName="batchProcessOrganization-Batch-Block-Size-6" doc:id="2976163d-8b12-4e44-a173-a4be2de957fc" blockSize="6" target="batchSummary">
+		<batch:job jobName="batchProcessOrganization-Batch-Block-Size-2" doc:id="2976163d-8b12-4e44-a173-a4be2de957fc" blockSize="2" target="batchSummary" maxConcurrency="2">
 			<batch:process-records >
 				<batch:step name="Step" doc:id="58d20630-f5ee-4c42-b061-657501455c8d" >
 					<set-variable value="#[payload.company]" doc:name="organization" doc:id="15dbf783-b077-4237-a978-fd520850bb61" variableName="organization" />
@@ -138,6 +138,10 @@ url ++ company ++ "/news?items_per_page=250"]]></ee:set-variable>
 		</batch:job>
 	</flow>
 	<flow name="getNewsForOrg" doc:id="141f9591-44dd-403e-b362-0458d83097f6">
+		<scripting:execute doc:name="Sleep 3000 ms" doc:id="b17eb026-88d3-4366-bf21-ea495182e2e6" engine="groovy">
+			<scripting:code >sleep(3000)
+return payload</scripting:code>
+		</scripting:execute>
 		<flow-ref doc:name="Get First Set of News Postings" doc:id="2e36bc71-c9c5-48d9-82b2-c8a33dab1b3c" name="getNewsPosts" />
 		<set-variable value="#[payload.data.paging.next_page_url]" doc:name="nextURL" doc:id="4326157e-2631-410c-a6dc-aaacdd231d82" variableName="nextURL" />
 		<ee:transform doc:name="Create iterator to iterate through rest of pages" doc:id="11ed4b93-6326-4454-9f94-dd08d0ef9cb3">
@@ -147,7 +151,7 @@ url ++ company ++ "/news?items_per_page=250"]]></ee:set-variable>
 				<ee:set-variable variableName="iteratorArray"><![CDATA[%dw 2.0
 output application/java
 
-var total_pages = payload.data.paging.number_of_pages default 1
+var total_pages = payload.data.paging.number_of_pages
 ---
 if (total_pages > 1)
 	2 to total_pages
@@ -158,6 +162,10 @@ else
 		<foreach doc:name="For Each" doc:id="44e7436f-4cc5-44ac-8c89-582db4add087" collection="vars.iteratorArray">
 			<flow-ref doc:name="getNewsPosts" doc:id="760670c6-e544-4d50-9289-ced896e76187" name="getNewsPosts" />
 			<set-variable value="#[payload.data.paging.next_page_url]" doc:name="nextURL" doc:id="111180f7-3a18-47a0-8037-9687b17d65fa" variableName="nextURL" />
+			<scripting:execute engine="groovy" doc:name="Sleep 1000 ms" doc:id="138d6e67-5c57-45d3-9426-45af5dc71895" >
+				<scripting:code >sleep(1000)
+return payload</scripting:code>
+			</scripting:execute>
 		</foreach>
 		<logger level="INFO" doc:name="Logger" doc:id="294dcbe3-a899-4fae-9219-30d2594fe14d" message="Finished pulling all news for: #[vars.organization], total news posts: #[payload.data.paging.total_items]" category="getNewsForOrg" />
 		<error-handler>
@@ -178,7 +186,9 @@ else
 		<logger level="INFO" doc:name="Logger" doc:id="f72f6659-4fc4-49f4-abd8-f663690fc253" message='#[output text/plain --- "Uploading news data batch $(payload.data.paging.current_page default 0) of $(payload.data.paging.number_of_pages default 0) for $(vars.organization) into PostGresDB"]' category="getNewsForOrg" />
 		<ee:transform doc:name="Extract just news postings" doc:id="c2dc27f9-a63c-4d6e-8f6b-f6545240951b" >
 			<ee:message >
-				<ee:set-payload ><![CDATA[%dw 2.0
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="newsPosts" ><![CDATA[%dw 2.0
 output application/java
 ---
 payload.data.items map ((news) ->
@@ -192,11 +202,12 @@ payload.data.items map ((news) ->
 		created_at: news.properties.created_at,
 		updated_at: news.properties.updated_at	
 	}
-)]]></ee:set-payload>
-			</ee:message>
+)]]></ee:set-variable>
+			</ee:variables>
 		</ee:transform>
-		<db:bulk-insert doc:name="Bulk insert" doc:id="d6ffe3c5-e18e-4e6e-a0a7-ac9bc18f95ee" config-ref="PostGres">
-							<db:sql>INSERT INTO ${db.table}
+		<db:bulk-insert doc:name="Bulk insert" doc:id="d6ffe3c5-e18e-4e6e-a0a7-ac9bc18f95ee" config-ref="PostGres" target="bulkSummary">
+							<db:bulk-input-parameters ><![CDATA[#[vars.newsPosts]]]></db:bulk-input-parameters>
+			<db:sql>INSERT INTO ${db.table}
 VALUES (:uuid, :company, :title, :news_url, :author, :posted_on, :created_at, :updated_at)</db:sql>
 						</db:bulk-insert>
 	</sub-flow>
