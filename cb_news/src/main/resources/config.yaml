@@ -1,10 +1,9 @@
-crunchbase:
+crucrunchbase:
   url: "https://api.crunchbase.com/v3.1/organizations/"
-  api:
-    key: "overridden_at_runtime"
+  api.key: "put_api_key_here"
     
 company:
-  list: "Desktop/crunchbase/process_company_list_enormous.csv"
+  list: "Desktop/crunchbase/process_company_list.csv"
   
 db:
   url: "jdbc:postgresql://localhost:5432/crunchbase"
