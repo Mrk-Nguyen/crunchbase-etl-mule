@@ -1,4 +1,4 @@
-crucrunchbase:
+crunchbase:
   url: "https://api.crunchbase.com/v3.1/organizations/"
   api.key: "put_api_key_here"
     
